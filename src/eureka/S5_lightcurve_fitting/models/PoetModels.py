@@ -88,12 +88,7 @@ class PoetPCModel(Model):
         lcfinal : ndarray
             The value of the model at the times self.time.
         """
-        if channel is None:
-            nchan = self.nchannel_fitted
-            channels = self.fitted_channels
-        else:
-            nchan = 1
-            channels = [channel, ]
+        nchan, channels = self._channels(channel)
 
         if pid is None:
             pid_iter = range(self.num_planets)
@@ -111,6 +106,7 @@ class PoetPCModel(Model):
                 chan = channels[c]
             else:
                 chan = 0
+            wl = self.wl_groups[chan] if self.wl_groups is not None else 0
 
             time = self.time
             if self.multwhite:
@@ -119,7 +115,7 @@ class PoetPCModel(Model):
 
             for pid in pid_iter:
                 # Initialize planet
-                poet_params = PlanetParams(self, pid, chan)
+                poet_params = PlanetParams(self, pid, chan, wl)
 
                 if poet_params.t_secondary is None:
                     # If not explicitly fitting for the time of eclipse, get

@@ -1,7 +1,6 @@
 import numpy as np
 
 from .Model import Model
-from ...lib.readEPF import Parameters
 from ...lib.split_channels import split, get_trim
 
 
@@ -15,8 +14,6 @@ class HSTRampModel(Model):
         **kwargs : dict
             Additional parameters to pass to
             eureka.S5_lightcurve_fitting.models.Model.__init__().
-            Can pass in the parameters, longparamlist, nchan, and
-            paramtitles arguments here.
         """
         # Inherit from Model class
         super().__init__(**kwargs)
@@ -25,19 +22,18 @@ class HSTRampModel(Model):
         # Define model type (physical, systematic, other)
         self.modeltype = 'systematic'
 
-        # Check for Parameters instance
-        self.parameters = kwargs.get('parameters')
-
-        # Generate parameters from kwargs if necessary
-        if self.parameters is None:
-            coeff_dict = kwargs.get('coeff_dict')
-            params = {hN: coeff for hN, coeff in coeff_dict.items()
-                      if hN.startswith('h') and hN[1:].isdigit()}
-            self.parameters = Parameters(**params)
-
-        # Update coefficients
-        self.coeffs = np.zeros((self.nchannel_fitted, 6))
-        self._parse_coeffs()
+        # Build per-channel coefficient keys keyed by real channel id.
+        # Coeffs: h0..h5 (+ optional _ch#/_wl# suffixes).
+        self.h_keys_per_chan = {}
+        for chan, wl in zip(self.fitted_channels, self.wl_groups):
+            suffix = ''
+            if chan > 0:
+                suffix += f'_ch{chan}'
+            if wl > 0:
+                suffix += f'_wl{wl}'
+            self.h_keys_per_chan[chan] = [f'h0{suffix}', f'h1{suffix}',
+                                          f'h2{suffix}', f'h3{suffix}',
+                                          f'h4{suffix}', f'h5{suffix}']
 
     @property
     def time(self):
@@ -47,90 +43,74 @@ class HSTRampModel(Model):
     @time.setter
     def time(self, time_array):
         """A setter for the time."""
+        if time_array is None:
+            self._time = None
+            self.time_local = None
+            return
+
         self._time = np.ma.masked_invalid(time_array)
-        if self.time is not None:
-            # Convert to local time
-            if self.multwhite:
-                self.time_local = np.ma.zeros(self.time.shape)
-                for chan in self.fitted_channels:
-                    # Split the arrays that have lengths
-                    # of the original time axis
-                    trim1, trim2 = get_trim(self.nints, chan)
-                    time = self.time[trim1:trim2]
-                    self.time_local[trim1:trim2] = time-time[0]
-            else:
-                self.time_local = self.time - self.time[0]
 
-    def _parse_coeffs(self):
-        """Convert dict of 'h#' coefficients into a list
-        of coefficients in increasing order, i.e. ['h0','h1','h2'].
+        # Convert to local time
+        if self.multwhite:
+            self.time_local = np.ma.zeros(self._time.shape)
+            for chan in self.fitted_channels:
+                trim1, trim2 = get_trim(self.nints, chan)
+                piece = self._time[trim1:trim2]
+                self.time_local[trim1:trim2] = piece - piece.data[0]
+        else:
+            self.time_local = self._time - self._time.data[0]
 
-        Returns
-        -------
-        np.ndarray
-            The sequence of coefficient values.
-        """
-        # Parse 'h#' keyword arguments as coefficients
-        for c in range(self.nchannel_fitted):
-            if self.nchannel_fitted > 1:
-                chan = self.fitted_channels[c]
-            else:
-                chan = 0
-
-            for i in range(6):
-                try:
-                    if chan == 0:
-                        self.coeffs[c, i] = self.parameters.dict[f'h{i}'][0]
-                    else:
-                        self.coeffs[c, i] = \
-                            self.parameters.dict[f'h{i}_ch{chan}'][0]
-                except KeyError:
-                    pass
+    def _read_coeffs_for_chan(self, chan):
+        """Read (h0-h5) for the requested channel."""
+        keys = self.h_keys_per_chan[chan]
+        vals = tuple(self._get_param_value(k, 0.0) for k in keys)
+        return vals  # h0, h1, h2, h3, h4, h5
 
     def eval(self, channel=None, **kwargs):
         """Evaluate the function with the given values.
 
         Parameters
         ----------
+        channel : int; optional
+            If not None, only consider one of the channels.
         **kwargs : dict
             Must pass in the time array here if not already set.
 
         Returns
         -------
-        lcfinal : ndarray
-            The value of the model at the times self.time.
+        lcfinal : np.ma.MaskedArray
+            The value of the model at self.time.
         """
-        if channel is None:
-            nchan = self.nchannel_fitted
-            channels = self.fitted_channels
-        else:
-            nchan = 1
-            channels = [channel, ]
+        nchan, channels = self._channels(channel)
 
         # Get the time
         if self.time is None:
             self.time = kwargs.get('time')
 
-        # Create the ramp from the coeffs
-        lcfinal = np.array([])
+        pieces = []
         for c in np.arange(nchan):
             if self.nchannel_fitted > 1:
                 chan = channels[c]
             else:
                 chan = 0
 
-            time = self.time_local
+            t = self.time_local
             if self.multwhite:
                 # Split the arrays that have lengths of the original time axis
-                time = split([time, ], self.nints, chan)[0]
+                t = split([t, ], self.nints, chan)[0]
 
-            h0, h1, h2, h3, h4, h5 = self.coeffs[c]
+            h0, h1, h2, h3, h4, h5 = self._read_coeffs_for_chan(chan)
+
             # Batch time is relative to the start of each HST orbit
-            # h5 is the orbital period of HST (~96 minutes)
-            self.time_batch = (time - h5) % h4
-            lcpiece = (1 +
-                       h0*np.exp(-h1*self.time_batch) +
-                       h2*self.time_batch +
-                       h3*self.time_batch**2)
-            lcfinal = np.append(lcfinal, lcpiece)
-        return lcfinal
+            # h4 = orbital period (~96 min), h5 = phase offset.
+            t_batch = (t - h5) % h4
+            lcpiece = (1. +
+                       h0*np.exp(-h1*t_batch) +
+                       h2*t_batch +
+                       h3*t_batch**2)
+            pieces.append(lcpiece)
+
+        if len(pieces) == 1:
+            return pieces[0]
+        else:
+            return np.ma.concatenate(pieces)

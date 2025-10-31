@@ -89,12 +89,7 @@ class BatmanTransitModel(Model):
         lcfinal : ndarray
             The value of the model at the times self.time.
         """
-        if channel is None:
-            nchan = self.nchannel_fitted
-            channels = self.fitted_channels
-        else:
-            nchan = 1
-            channels = [channel, ]
+        nchan, channels = self._channels(channel)
 
         if pid is None:
             pid_iter = range(self.num_planets)
@@ -234,12 +229,7 @@ class BatmanEclipseModel(Model):
         lcfinal : ndarray
             The value of the model at the times self.time.
         """
-        if channel is None:
-            nchan = self.nchannel_fitted
-            channels = self.fitted_channels
-        else:
-            nchan = 1
-            channels = [channel, ]
+        nchan, channels = self._channels(channel)
 
         if pid is None:
             pid_iter = range(self.num_planets)

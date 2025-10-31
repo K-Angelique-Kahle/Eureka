@@ -29,8 +29,8 @@ class Model:
         self.nchannel = kwargs.get('nchannel', 1)
         self.nchannel_fitted = kwargs.get('nchannel_fitted', 1)
         self.fitted_channels = kwargs.get('fitted_channels', [0, ])
-        self.wl_groups = kwargs.get('wl_groups', None)
-        self.multwhite = kwargs.get('multwhite')
+        self.wl_groups = kwargs.get('wl_groups', [0, ]*self.nchannel_fitted)
+        self.multwhite = kwargs.get('multwhite', False)
         self.nints = kwargs.get('nints')
         self.fitter = kwargs.get('fitter', None)
         self.time = kwargs.get('time', None)
@@ -47,6 +47,57 @@ class Model:
         for arg, val in kwargs.items():
             if arg != 'log':
                 setattr(self, arg, val)
+
+        # --- normalize/validate metadata ---
+        if (not isinstance(self.fitted_channels, (list, tuple))
+                or len(self.fitted_channels) != self.nchannel_fitted):
+            raise ValueError("fitted_channels must be a list/tuple of length "
+                             "nchannel_fitted.")
+        if (self.wl_groups is None
+                or len(self.wl_groups) != len(self.fitted_channels)):
+            raise ValueError("wl_groups must be the same length as "
+                             "fitted_channels.")
+
+    def _channels(self, channel=None):
+        """Return the list of channel IDs to evaluate.
+
+        Parameters
+        ----------
+        channel : int; optional
+            If not None, only consider one of the channels. Defaults to None.
+
+        Returns
+        -------
+        nchan : int
+            The number of channels to evaluate.
+        channels : list
+            The list of channel IDs to evaluate.
+        """
+        channels = self.fitted_channels if channel is None else [channel]
+        nchan = len(channels)
+        return nchan, channels
+
+    def _get_param_value(self, key, default=0.):
+        """Safely extract a scalar parameter value from self.parameters.
+
+        Works with Parameters objects (having .value) or plain numerics.
+        """
+        # No parameters object at all
+        if getattr(self, "parameters", None) is None:
+            return float(default)
+
+        val = getattr(self.parameters, key, default)
+
+        # Parameters objects have a .value attribute
+        if hasattr(val, "value"):
+            return float(val.value)
+
+        # Numpy scalar or size-1 array
+        if isinstance(val, (np.ma.MaskedArray, np.ndarray)):
+            return float(np.asanyarray(val).reshape(-1)[0])
+
+        # Plain number or something else castable
+        return float(val)
 
     def __mul__(self, other):
         """Multiply model components to make a combined model.
@@ -69,11 +120,18 @@ class Model:
         # Combine the model parameters too
         parameters = self.parameters + other.parameters
         if self.paramtitles is None:
-            paramtitles = other.paramtitles
-        elif other.paramtitles is not None:
-            paramtitles = self.paramtitles.append(other.paramtitles)
+            if isinstance(other.paramtitles, list):
+                paramtitles = other.paramtitles[:]
+            else:
+                paramtitles = other.paramtitles
+        elif other.paramtitles is None:
+            if isinstance(self.paramtitles, list):
+                paramtitles = self.paramtitles[:]
+            else:
+                paramtitles = self.paramtitles
         else:
-            paramtitles = self.paramtitles
+            # both are present: concatenate
+            paramtitles = self.paramtitles + other.paramtitles
 
         return CompositeModel([copy.copy(self), other], parameters=parameters,
                               paramtitles=paramtitles)
@@ -216,16 +274,9 @@ class Model:
             # For now, the dict and Parameter are separate
             self.parameters.dict[arg][0] = val
             getattr(self.parameters, arg).value = val
-        self._parse_coeffs()
 
         for component in self.components:
             component.update(newparams, **kwargs)
-
-    def _parse_coeffs(self):
-        """A placeholder function to do any additional processing when
-        calling update.
-        """
-        return
 
     @plots.apply_style
     def plot(self, components=False, ax=None, draw=False, color='blue',

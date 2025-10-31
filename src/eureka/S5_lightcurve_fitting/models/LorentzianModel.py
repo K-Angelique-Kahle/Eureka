@@ -1,50 +1,20 @@
 import numpy as np
+
 from .Model import Model
 from ...lib.split_channels import split
 
 
-class Params():
-    """
-    Define asymetric Lorentzian parameters.
-    """
-    def __init__(self, model):
-        """
-        Set attributes to Params object.
-
-        Parameters
-        ----------
-        model : object
-            The model.eval object that contains a dictionary of parameter names
-            and their current values.
-        """
-        # Set parameters
-        self.lor_amp = None
-        self.lor_amp_lhs = None
-        self.lor_amp_rhs = None
-        self.lor_hwhm = None
-        self.lor_hwhm_lhs = None
-        self.lor_hwhm_rhs = None
-        self.lor_t0 = None
-        self.lor_power = 2
-        for item in self.__dict__.keys():
-            try:
-                setattr(self, item, model.parameters.dict[item][0])
-            except KeyError:
-                pass
-
-
 class LorentzianModel(Model):
-    """An asymetric lorentzian model"""
+    """An asymmetric Lorentzian model"""
+
     def __init__(self, **kwargs):
-        """Initialize the asymetric lorentzian model.
+        """Initialize the asymmetric Lorentzian model.
 
         Parameters
         ----------
         **kwargs : dict
             Additional parameters to pass to
             eureka.S5_lightcurve_fitting.models.Model.__init__().
-            Can pass in the parameters, longparamlist, nchan, and
-            paramtitles arguments here.
         """
         # Inherit from Model class
         super().__init__(**kwargs)
@@ -52,6 +22,69 @@ class LorentzianModel(Model):
 
         # Define model type (physical, systematic, other)
         self.modeltype = 'physical'
+
+        # Build per-channel suffix for param key lookup (_ch#/_wl#).
+        self._suffix_by_chan = {}
+        for chan, wl in zip(self.fitted_channels, self.wl_groups):
+            sfx = ''
+            if chan > 0:
+                sfx += f'_ch{chan}'
+            if wl > 0:
+                sfx += f'_wl{wl}'
+            self._suffix_by_chan[chan] = sfx
+
+    def _get_optional(self, key):
+        """Return float value for param key or None if missing/invalid.
+
+        Based on _get_param_value, but allows for missing parameters.
+
+        Parameters
+        ----------
+        key : str
+            Parameter key to look up.
+        """
+        if getattr(self, "parameters", None) is None:
+            return None
+
+        val = getattr(self.parameters, key, None)
+        if val is None:
+            return None
+
+        if hasattr(val, "value"):
+            val = val.value
+
+        try:
+            out = float(val)
+        except (TypeError, ValueError, OverflowError):
+            return None
+
+        return out
+
+    def _read_params_for_chan(self, chan):
+        """Read Lorentzian params for a channel.
+
+        Parameters
+        ----------
+        chan : int
+            Channel index.
+
+        Returns
+        -------
+        tuple
+            Parameters tuple with possible None values.
+        """
+        sfx = self._suffix_by_chan.get(chan, '')
+
+        params = (self._get_optional(f'lor_amp{sfx}'),
+                  self._get_optional(f'lor_amp_lhs{sfx}'),
+                  self._get_optional(f'lor_amp_rhs{sfx}'),
+                  self._get_optional(f'lor_hwhm{sfx}'),
+                  self._get_optional(f'lor_hwhm_lhs{sfx}'),
+                  self._get_optional(f'lor_hwhm_rhs{sfx}'),
+                  self._get_param_value(f'lor_t0{sfx}', 0.),
+                  self._get_param_value(f'lor_power{sfx}', 2.))
+
+        return params
 
     def eval(self, channel=None, **kwargs):
         """Evaluate the function with the given values.
@@ -65,77 +98,82 @@ class LorentzianModel(Model):
 
         Returns
         -------
-        lcfinal : ndarray
-            The value of the model at the times self.time.
+        lcfinal : np.ma.MaskedArray
+            The value of the model at self.time.
         """
-        if channel is None:
-            nchan = self.nchannel_fitted
-            channels = self.fitted_channels
-        else:
-            nchan = 1
-            channels = [channel, ]
+        nchan, channels = self._channels(channel)
 
         # Get the time
         if self.time is None:
             self.time = kwargs.get('time')
 
-        # Set all parameters
-        lcfinal = np.ma.masked_array([])
+        pieces = []
         for c in range(nchan):
             if self.nchannel_fitted > 1:
                 chan = channels[c]
             else:
                 chan = 0
 
-            time = self.time
+            t = self.time
             if self.multwhite:
-                # Split the arrays that have lengths of the original time axis
-                time = split([time, ], self.nints, chan)[0]
+                t = split([t], self.nints, chan)[0]
 
-            # Initialize model
-            params = Params(self)
-            p = params.lor_power
-            t0 = params.lor_t0
+            amp, amp_lhs, amp_rhs, hwhm, hwhm_lhs, hwhm_rhs, t0, power = \
+                self._read_params_for_chan(chan)
 
-            if (params.lor_hwhm is None) and (params.lor_amp is None):
-                # Determine left and right halves of asymmetric Lorentzian
-                lhs = np.ma.where(time <= t0)
-                rhs = np.ma.where(time > t0)
-                # Compute asymmetric Lorentzian with baseline offset
-                ut = np.ma.zeros(time.shape)
-                lorentzian = np.ma.zeros(time.shape)
-                ut[lhs] = (t0-time[lhs])/params.lor_hwhm_lhs
-                ut[rhs] = (time[rhs]-t0)/params.lor_hwhm_rhs
-                lorentzian[lhs] = 1 + params.lor_amp_lhs/(1 + ut[lhs]**p)
-                baseline = 1 + params.lor_amp_lhs - params.lor_amp_rhs
-                lorentzian[rhs] = baseline+params.lor_amp_rhs/(1+ut[rhs]**p)
-            elif (params.lor_hwhm is None) and \
-                    (params.lor_amp_lhs is None) and \
-                    (params.lor_amp_rhs is None):
-                # Determine left and right halves of asymmetric Lorentzian
-                lhs = np.ma.where(time <= t0)
-                rhs = np.ma.where(time > t0)
-                # Compute asymmetric Lorentzian with constant baseline
-                ut = np.ma.zeros(time.shape)
-                ut[lhs] = (time[lhs]-t0)/params.lor_hwhm_lhs
-                ut[rhs] = (time[rhs]-t0)/params.lor_hwhm_rhs
-                lorentzian = 1 + params.lor_amp_lhs/(1 + ut**p)
-            elif (params.lor_hwhm_lhs is None) and \
-                    (params.lor_hwhm_rhs is None) and \
-                    (params.lor_amp_lhs is None) and \
-                    (params.lor_amp_rhs is None):
-                # Compute symmetric Lorentzian
-                ut = 2*(time-t0)/params.lor_hwhm
-                lorentzian = 1 + params.lor_amp/(1 + ut**p)
+            # Branch selection:
+            # A) Symmetric: amp & hwhm set; no side-specific params.
+            is_sym = (
+                amp is not None and hwhm is not None and
+                amp_lhs is None and amp_rhs is None and
+                hwhm_lhs is None and hwhm_rhs is None
+            )
+            # B) Asym widths only: amp set; hwhm_lhs & hwhm_rhs set.
+            is_asym_width = (
+                amp is not None and hwhm is None and
+                hwhm_lhs is not None and hwhm_rhs is not None and
+                amp_lhs is None and amp_rhs is None
+            )
+            # C) Asym amps + widths: all side-specific set; no global amp.
+            is_asym_amp_width = (
+                amp is None and hwhm is None and
+                amp_lhs is not None and amp_rhs is not None and
+                hwhm_lhs is not None and hwhm_rhs is not None
+            )
+
+            if is_asym_amp_width:
+                lhs = np.ma.where(t <= t0)
+                rhs = np.ma.where(t > t0)
+                ut = np.ma.zeros(t.shape)
+                ut[lhs] = (t0 - t[lhs]) / hwhm_lhs
+                ut[rhs] = (t[rhs] - t0) / hwhm_rhs
+
+                piece = np.ma.zeros(t.shape)
+                baseline = 1. + amp_lhs - amp_rhs
+                piece[lhs] = 1. + amp_lhs / (1. + ut[lhs]**power)
+                piece[rhs] = baseline + amp_rhs / (1. + ut[rhs]**power)
+            elif is_asym_width:
+                lhs = np.ma.where(t <= t0)
+                rhs = np.ma.where(t > t0)
+                ut = np.ma.zeros(t.shape)
+                ut[lhs] = (t[lhs] - t0) / hwhm_lhs
+                ut[rhs] = (t[rhs] - t0) / hwhm_rhs
+
+                piece = 1. + amp / (1. + ut**power)
+            elif is_sym:
+                ut = 2. * (t - t0) / hwhm
+                piece = 1. + amp / (1. + ut**power)
             else:
-                # Unresolvable situation
-                raise Exception("Cannot determine the type of Lorentzian model"
-                                " to fit.  Use one of the following options: "
-                                "1. lor_amp, lor_hwhm; "
-                                "2. lor_amp, lor_hwhm_lhs, lor_hwhm_rhs; "
-                                "3. lor_amp_lhs, lor_amp_rhs, lor_hwhm_lhs, "
-                                "lor_hwhm_rhs.")
+                raise ValueError(
+                    "Ambiguous Lorentzian parameterization. Use one of:\n"
+                    "  1) lor_amp, lor_hwhm\n"
+                    "  2) lor_amp, lor_hwhm_lhs, lor_hwhm_rhs\n"
+                    "  3) lor_amp_lhs, lor_amp_rhs, lor_hwhm_lhs, lor_hwhm_rhs"
+                )
 
-            lcfinal = np.ma.append(lcfinal, lorentzian)
+            pieces.append(piece)
 
-        return lcfinal
+        if len(pieces) == 1:
+            return pieces[0]
+        else:
+            return np.ma.concatenate(pieces)
