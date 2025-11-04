@@ -53,6 +53,8 @@ class S5MetaClass(MetaClass):
         # all channels (e.g. orbital parameters), while others are only shared
         # between channels with the same wavelength (e.g. planetary radius).
         self.wl_groups = getattr(self, 'wl_groups', None)
+        if self.wl_groups is not None:
+            print('Using wl_groups:', self.wl_groups)
 
         # Repeat Stage 5 for each of the aperture sizes run from Stage 3?
         self.allapers = getattr(self, 'allapers', False)

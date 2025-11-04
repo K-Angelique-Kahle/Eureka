@@ -29,7 +29,7 @@ class Model:
         self.nchannel = kwargs.get('nchannel', 1)
         self.nchannel_fitted = kwargs.get('nchannel_fitted', 1)
         self.fitted_channels = kwargs.get('fitted_channels', [0, ])
-        self.wl_groups = kwargs.get('wl_groups', [0, ]*self.nchannel_fitted)
+        self.wl_groups = kwargs.get('wl_groups', None)
         self.multwhite = kwargs.get('multwhite', False)
         self.nints = kwargs.get('nints')
         self.fitter = kwargs.get('fitter', None)
@@ -48,13 +48,15 @@ class Model:
             if arg != 'log':
                 setattr(self, arg, val)
 
+        if self.wl_groups is None:
+            self.wl_groups = [0, ]*self.nchannel_fitted
+
         # --- normalize/validate metadata ---
-        if (not isinstance(self.fitted_channels, (list, tuple))
+        if (not isinstance(self.fitted_channels, (list, tuple, np.ndarray))
                 or len(self.fitted_channels) != self.nchannel_fitted):
             raise ValueError("fitted_channels must be a list/tuple of length "
                              "nchannel_fitted.")
-        if (self.wl_groups is None
-                or len(self.wl_groups) != len(self.fitted_channels)):
+        if len(self.wl_groups) != len(self.fitted_channels):
             raise ValueError("wl_groups must be the same length as "
                              "fitted_channels.")
 

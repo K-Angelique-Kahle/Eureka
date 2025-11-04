@@ -187,7 +187,7 @@ class GPModel(Model):
                 chan = self.fitted_channels[c]
             else:
                 chan = 0
-            time = self.time_local
+            time = self.time
             if self.multwhite:
                 # Split the arrays that have lengths of the original time axis
                 time = split([time, ], self.nints, chan)[0]
