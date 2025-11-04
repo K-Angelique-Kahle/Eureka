@@ -115,7 +115,8 @@ class CommonModeModel(Model):
             time = self.time_local
             if self.multwhite:
                 # Split the arrays that have lengths of the original time axis
-                time, cm_flux = split([time, self.cm_flux], self.nints, chan)[0]
+                time, cm_flux = split([time, self.cm_flux],
+                                      self.nints, chan)[0]
 
             cm1, cm2 = self._read_coeffs_for_chan(chan)
             lcpiece = 1. + cm1*cm_flux + cm2*cm_flux**2
