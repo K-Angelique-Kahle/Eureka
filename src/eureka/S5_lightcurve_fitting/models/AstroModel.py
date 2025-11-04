@@ -13,7 +13,7 @@ class PlanetParams():
     """
     Define planet parameters.
     """
-    def __init__(self, model, pid=0, channel=0, wl=0, eval=True):
+    def __init__(self, model, pid=0, channel=0, eval=True):
         """
         Set attributes to PlanetParams object.
 
@@ -27,17 +27,12 @@ class PlanetParams():
         channel : int, optional
             The channel number for multi-wavelength fits or mutli-white fits.
             Defaults to 0.
-        wl : int, optional
-            The wavelength channel for multi-wavelength fits. Can be used for
-            shared parameters in multi-white fits which should be different
-            between channels. Defaults to 0.
         eval : bool; optional
             If true evaluate the model, otherwise simply compile the model.
             Defaults to True.
         """
 
         if eval:
-            parameterObject = model.parameters
             lib = np
         else:
             # No other option is currently supported until jax is added
@@ -51,9 +46,6 @@ class PlanetParams():
 
         self.channel = channel
         self.channel_id = '' if channel == 0 else f'_ch{self.channel}'
-
-        self.wl = wl
-        self.wl_id = '' if wl == 0 else f'_wl{self.wl}'
 
         # Transit/eclipse parameters
         self.t0 = None
@@ -139,21 +131,19 @@ class PlanetParams():
         else:
             self.ydeg = 0
 
-        # ----- Local helper: use Model._get_param_value (wl > ch > base) -----
-        def _get_param(base, pid_override=None):
-            """Return float value for base at (pid, channel, wl) or None."""
+        # ------------- Local helper: use Model._get_param_value --------------
+        def _get_param(base, chan_override=None, pid_override=None):
             pid_use = self.pid if pid_override is None else pid_override
-            return model._get_param_value(
-                base, default=None,
-                chan=self.channel, wl=self.wl, pid=pid_use
-            )
+            chan_use = self.channel if chan_override is None else chan_override
+            return model._get_param_value(base, default=None,
+                                          chan=chan_use, pid=pid_use)
         # ---------------------------------------------------------------------
 
         # Load in values using resolver; keep defaults if not found
         for item in list(self.__dict__.keys()):
             item_base = item
             try:
-                val = _get_param(item_base, pid_override=self.pid)
+                val = _get_param(item_base)
                 if val is None:
                     if (item in [f'u{i}' for i in range(1, 5)] or
                             item.startswith('spot')):
@@ -166,37 +156,37 @@ class PlanetParams():
 
         # Allow for rp or rprs
         if self.rprs is None:
-            val = _get_param('rp', pid_override=self.pid)
+            val = _get_param('rp')
             if val is not None:
                 self.rprs = val
         if self.rp is None:
-            val = _get_param('rprs', pid_override=self.pid)
+            val = _get_param('rprs')
             if val is not None:
                 self.rp = val
 
         # Allow for rp2 or rprs2
         if self.rprs2 is None:
-            val = _get_param('rp2', pid_override=self.pid)
+            val = _get_param('rp2')
             if val is not None:
                 self.rprs2 = val
         if self.rp2 is None:
-            val = _get_param('rprs2', pid_override=self.pid)
+            val = _get_param('rprs2')
             if val is not None:
                 self.rp2 = val
 
         # Allow for a or ars
         if self.ars is None:
-            val = _get_param('a', pid_override=self.pid)
+            val = _get_param('a')
             if val is not None:
                 self.ars = val
         if self.a is None:
-            val = _get_param('ars', pid_override=self.pid)
+            val = _get_param('ars')
             if val is not None:
                 self.a = val
 
         # b from inc (only if inc and a exist; validate inc range)
         if self.b is None:
-            inc_value = _get_param('inc', pid_override=self.pid)
+            inc_value = _get_param('inc')
             a_value = self.a
             if (inc_value is not None) and (a_value is not None):
                 if not (0.0 <= inc_value <= 180.0):
@@ -206,7 +196,7 @@ class PlanetParams():
                 self.b = a_value * lib.cos(inc_value * np.pi / 180.0)
         # inc from b (domain-safe; clamp only tiny roundoff)
         if self.inc is None:
-            b_value = _get_param('b', pid_override=self.pid)
+            b_value = _get_param('b')
             a_value = self.a
             if (b_value is not None and a_value is not None
                     and a_value != 0):
@@ -229,25 +219,25 @@ class PlanetParams():
             self.ecc = 0.
             self.w = 180.
         if self.ecosw is None:
-            ecc_val = _get_param('ecc', pid_override=self.pid)
-            w_val = _get_param('w', pid_override=self.pid)
+            ecc_val = _get_param('ecc')
+            w_val = _get_param('w')
             if ecc_val is not None and w_val is not None:
                 self.ecosw = ecc_val * lib.cos(w_val * np.pi / 180.0)
                 self.esinw = ecc_val * lib.sin(w_val * np.pi / 180.0)
         if self.ecc is None:
-            ecosw_val = _get_param('ecosw', pid_override=self.pid)
-            esinw_val = _get_param('esinw', pid_override=self.pid)
+            ecosw_val = _get_param('ecosw')
+            esinw_val = _get_param('esinw')
             if ecosw_val is not None and esinw_val is not None:
                 self.ecc = lib.sqrt(ecosw_val**2 + esinw_val**2)
                 self.w = lib.arctan2(esinw_val, ecosw_val) * 180.0 / np.pi
 
         # Allow for fp or fpfs
         if self.fpfs is None:
-            val = _get_param('fp', pid_override=self.pid)
+            val = _get_param('fp')
             if val is not None:
                 self.fpfs = val
         if self.fp is None:
-            val = _get_param('fpfs', pid_override=self.pid)
+            val = _get_param('fpfs')
             if val is not None:
                 self.fp = val
         if self.fpfs is None:
@@ -260,17 +250,10 @@ class PlanetParams():
             ptype_Rs = model.parameters.dict['Rs'][1]
             if ptype_Rs == 'free':
                 # Resolve per-channel/wavelength if 'free'
-                value = model._get_param_value('Rs', default=None,
-                                               chan=self.channel, wl=self.wl)
+                value = _get_param('Rs', pid_override=0)
             else:
                 # Fixed: use base Rs
-                try:
-                    if eval:
-                        value = parameterObject.Rs.value
-                    else:
-                        value = parameterObject.Rs
-                except AttributeError:
-                    value = None
+                value = _get_param('Rs', chan_override=0, pid_override=0)
             if value is None:
                 msg = ('Missing required parameter Rs in your EPF. '
                        'Make sure it is not set to "independent" as this is '
