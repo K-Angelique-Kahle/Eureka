@@ -354,7 +354,7 @@ class GPModel(Model):
         nchan, channels = self._channels(channel)
 
         logL = 0.
-        for c in np.arange(nchan):
+        for c in range(nchan):
             if self.nchannel_fitted > 1:
                 chan = channels[c]
                 # get flux and uncertainties for current channel

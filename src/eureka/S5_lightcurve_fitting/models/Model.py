@@ -52,14 +52,28 @@ class Model:
         if self.wl_groups is None:
             self.wl_groups = [0, ]*self.nchannel_fitted
 
-        # --- normalize/validate metadata ---
-        if (not isinstance(self.fitted_channels, (list, tuple, np.ndarray))
-                or len(self.fitted_channels) != self.nchannel_fitted):
-            raise ValueError("fitted_channels must be a list/tuple of length "
-                             "nchannel_fitted.")
-        if len(self.wl_groups) != len(self.fitted_channels):
-            raise ValueError("wl_groups must be the same length as "
-                             "fitted_channels.")
+        # --- normalize/validate metadata (cast to numpy arrays) ---
+        try:
+            fc = np.asarray(self.fitted_channels, dtype=int).reshape(-1)
+            wg = np.asarray(self.wl_groups, dtype=int).reshape(-1)
+        except Exception as e:
+            raise ValueError(f"Could not parse fitted_channels/wl_groups: {e}")
+
+        if fc.size != int(self.nchannel_fitted):
+            raise ValueError(
+                f"fitted_channels must have length nchannel_fitted "
+                f"(got {fc.size}, expected {self.nchannel_fitted})."
+            )
+        if wg.size != fc.size:
+            raise ValueError(
+                f"wl_groups must be the same length as fitted_channels "
+                f"(got {wg.size} vs {fc.size})."
+            )
+        # Store normalized arrays
+        self.fitted_channels = fc
+        self.wl_groups = wg
+        # Build quick lookup table from real channel id -> position
+        self._chan_to_pos = {int(ch): i for i, ch in enumerate(fc.tolist())}
 
     def _channels(self, channel=None):
         """Return the list of channel IDs to evaluate.
@@ -73,15 +87,18 @@ class Model:
         -------
         nchan : int
             The number of channels to evaluate.
-        channels : list
-            The list of channel IDs to evaluate.
+        channels : ndarray
+            The array of channel IDs to evaluate.
         """
-        channels = self.fitted_channels if channel is None else [channel]
+        if channel is None:
+            channels = self.fitted_channels
+        else:
+            channels = np.array([channel, ])
         nchan = len(channels)
         return nchan, channels
 
     def _wl_for_chan(self, chan):
-        """Return wavelength-group id aligned with ``self.fitted_channels``.
+        """Return wavelength-group id for a real channel id.
 
         Parameters
         ----------
@@ -93,10 +110,16 @@ class Model:
         int
             Wavelength-group id for this channel.
         """
-        idx = self.fitted_channels.index(chan)
-        return self.wl_groups[idx]
+        try:
+            pos = self._chan_to_pos[chan]
+        except (KeyError, ValueError, TypeError):
+            raise ValueError(
+                f"Channel {chan!r} not found in fitted_channels "
+                f"{self.fitted_channels!r}"
+            )
+        return self.wl_groups[pos]
 
-    def _get_param_value(self, base, default=0.0, *, chan=0, wl=None, pid=0):
+    def _get_param_value(self, base, default=0.0, *, chan=0, pid=0):
         """Resolve a parameter key (wl > ch > base) and return its value.
 
         Parameters
@@ -108,9 +131,6 @@ class Model:
             return ``None`` when unresolved or uncastable. Default 0.0.
         chan : int; optional
             Channel id to resolve against. Default 0.
-        wl : int; optional
-            Wavelength-group id. If None, inferred from ``chan``. Default
-            None.
         pid : int; optional
             Planet id for astrophysical parameters (0 for none). Default 0.
 
@@ -126,9 +146,7 @@ class Model:
             # No parameters object at all
             return None if default is None else float(default)
 
-        if wl is None:
-            wl = self._wl_for_chan(chan) if chan in self.fitted_channels else 0
-
+        wl = self._wl_for_chan(chan)
         key = resolve_param_key(base, params, pid=pid, channel=chan, wl=wl)
         val = getattr(self.parameters, key, default)
 

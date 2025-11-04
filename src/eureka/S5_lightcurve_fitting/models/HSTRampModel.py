@@ -47,12 +47,6 @@ class HSTRampModel(Model):
         else:
             self.time_local = self._time - self._time.data[0]
 
-    def _read_coeffs_for_chan(self, chan):
-        """Read (h0-h5) for the requested channel."""
-        keys = self.h_keys_per_chan[chan]
-        vals = tuple(self._get_param_value(k, 0.0) for k in keys)
-        return vals  # h0, h1, h2, h3, h4, h5
-
     def eval(self, channel=None, **kwargs):
         """Evaluate the function with the given values.
 
