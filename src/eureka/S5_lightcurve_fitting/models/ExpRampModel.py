@@ -24,18 +24,6 @@ class ExpRampModel(Model):
         # Define model type (physical, systematic, other)
         self.modeltype = 'systematic'
 
-        # Define the coefficient keys per channel
-        # Here we assume two exponentials: (r0, r1) and (r2, r3).
-        self.r_keys_per_chan = {}
-        for chan, wl in zip(self.fitted_channels, self.wl_groups):
-            suffix = ''
-            if chan > 0:
-                suffix += f'_ch{chan}'
-            if wl > 0:
-                suffix += f'_wl{wl}'
-            self.r_keys_per_chan[chan] = [f'r0{suffix}', f'r1{suffix}',
-                                          f'r2{suffix}', f'r3{suffix}']
-
     @property
     def time(self):
         """A getter for the time."""
@@ -63,11 +51,6 @@ class ExpRampModel(Model):
         else:
             # Use .data[0] to be robust to masks
             self.time_local = self._time - self._time.data[0]
-
-    def _read_coeff_tuple_for_chan(self, chan):
-        """Read (r0, r1, r2, r3) for the requested channel."""
-        keys = self.r_keys_per_chan[chan]
-        return tuple(self._get_param_value(k, 0.) for k in keys)
 
     def eval(self, channel=None, **kwargs):
         """Evaluate the function with the given values.
@@ -103,7 +86,11 @@ class ExpRampModel(Model):
                 # Split arrays that have lengths of the original time axis
                 t = split([t], self.nints, chan)[0]
 
-            r0, r1, r2, r3 = self._read_coeff_tuple_for_chan(chan)
+            # Get the coefficients for this channel
+            r0 = self._get_param_value('r0', chan=chan)
+            r1 = self._get_param_value('r1', chan=chan)
+            r2 = self._get_param_value('r2', chan=chan)
+            r3 = self._get_param_value('r3', chan=chan)
             lcpiece = 1. + r0*np.exp(-r1*t) + r2*np.exp(-r3*t)
             pieces.append(lcpiece)
 

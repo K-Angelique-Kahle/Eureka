@@ -22,17 +22,6 @@ class PolynomialModel(Model):
         # Define model type (physical, systematic, other)
         self.modeltype = 'systematic'
 
-        # Build per-channel coefficient keys keyed by real channel id.
-        # Coeff names: c0..c9 (+ optional _ch#/_wl# suffixes).
-        self.c_keys_per_chan = {}
-        for chan, wl in zip(self.fitted_channels, self.wl_groups):
-            suffix = ''
-            if chan > 0:
-                suffix += f'_ch{chan}'
-            if wl > 0:
-                suffix += f'_wl{wl}'
-            self.c_keys_per_chan[chan] = [f'c{i}{suffix}' for i in range(10)]
-
     @property
     def time(self):
         """A getter for the time."""
@@ -56,27 +45,6 @@ class PolynomialModel(Model):
                 self.time_local[trim1:trim2] = piece - piece.mean()
         else:
             self.time_local = self._time - self._time.mean()
-
-    def _read_coeffs_desc_for_chan(self, chan):
-        """Return poly coeffs in descending order for a given channel.
-
-        We read c0..c9, trim trailing zeros, then return
-        [cN, cN-1, ..., c0] suitable for np.polyval.
-        If all zeros, return [0.0].
-        """
-        keys = self.c_keys_per_chan[chan]  # c0-c9
-        vals = np.array([self._get_param_value(k) for k in keys])
-
-        # Trim high-degree trailing zeros.
-        nonzero = np.nonzero(vals)[0]
-        if nonzero.size == 0:
-            trimmed = np.array([0.], dtype=float)
-        else:
-            max_idx = int(nonzero[-1])
-            trimmed = vals[:max_idx+1]
-
-        # Descending order for np.polyval
-        return trimmed[::-1]
 
     def eval(self, channel=None, **kwargs):
         """Evaluate the function with the given values.
@@ -110,7 +78,21 @@ class PolynomialModel(Model):
             if self.multwhite:
                 t = split([t], self.nints, chan)[0]
 
-            coeffs_desc = self._read_coeffs_desc_for_chan(chan)
+            # Get the coefficients for this channel
+            vals = np.array([
+                self._get_param_value(f'c{i}', 0.0, chan=chan)
+                for i in range(10)
+            ])
+            # Trim high-degree trailing zeros.
+            nz = np.nonzero(vals)[0]
+            if nz.size == 0:
+                coeffs_desc = np.array([0.0], dtype=float)
+            else:
+                max_idx = int(nz[-1])
+                trimmed = vals[:max_idx + 1]
+                # Descending order for np.polyval: [cN, ..., c0]
+                coeffs_desc = trimmed[::-1]
+
             lcpiece = np.polyval(coeffs_desc, t)
             lcpiece = np.ma.masked_where(np.ma.getmaskarray(t), lcpiece)
             pieces.append(lcpiece)

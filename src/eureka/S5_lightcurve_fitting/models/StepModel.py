@@ -22,16 +22,6 @@ class StepModel(Model):
         # Define model type (physical, systematic, other)
         self.modeltype = 'systematic'
 
-        # Per-channel suffix for param key lookup: _ch# and optional _wl#.
-        self._suffix_by_chan = {}
-        for chan, wl in zip(self.fitted_channels, self.wl_groups):
-            sfx = ''
-            if chan > 0:
-                sfx += f'_ch{chan}'
-            if wl > 0:
-                sfx += f'_wl{wl}'
-            self._suffix_by_chan[chan] = sfx
-
     @property
     def time(self):
         """A getter for the time."""
@@ -59,15 +49,13 @@ class StepModel(Model):
             self.time_local = self._time - self._time.data[0]
 
     def _index_set_for_chan(self, chan):
-        """Discover step indices for a given channel.
+        """Discover usable step indices for a given channel.
 
-        Scans ``self.parameters.dict`` for keys that match the suffix for
-        this channel.
-
-        Accepted patterns per index N are:
-          * ``step{N}{sfx}`` and ``steptime{N}{sfx}``
-
-        Only indices present in *both* sets are returned.
+        Enumerate integer indices ``N`` present in any ``step{N}*`` or
+        ``steptime{N}*`` key. For each candidate ``N``, use
+        ``_get_param_value(..., default=None, chan=chan)`` to apply the
+        standard precedence (``wl > ch > base``) and keep those where *both*
+        a step and a steptime resolve to defined values.
 
         Parameters
         ----------
@@ -77,41 +65,42 @@ class StepModel(Model):
         Returns
         -------
         list of int
-            Sorted indices ``N`` present for both step and steptime.
+            Sorted indices where both step and steptime are defined after
+            resolution for this (chan, wl).
         """
         if getattr(self, "parameters", None) is None:
             return []
 
-        keys = getattr(self.parameters, "dict", {}).keys()
-        sfx = self._suffix_by_chan[chan]
+        keys = list(self.parameters.dict.keys())
 
-        def parse_idx(key, prefix, sfx_):
-            """Return N if key == f'{prefix}{{N}}{sfx_}', else None.
-
-            If ``sfx_`` is empty (chan==0 & wl==0), accept unsuffixed
-            keys; otherwise enforce the exact non-empty suffix.
-            """
-            if not key.startswith(prefix):
-                return None
-            if sfx_ and not key.endswith(sfx_):
-                return None
-            end = len(key) - len(sfx_) if sfx_ else len(key)
-            mid = key[len(prefix):end]
-            return int(mid) if mid.isdigit() else None
-
-        step_idx = set()
-        time_idx = set()
-
+        # Collect every integer N appearing after 'step' or 'steptime'
+        # and before any suffix (first non-digit).
+        cand = set()
         for k in keys:
-            i = parse_idx(k, "step", sfx)
-            if i is not None:
-                step_idx.add(i)
-            i = parse_idx(k, "steptime", sfx)
-            if i is not None:
-                time_idx.add(i)
+            if k.startswith('step'):
+                rest = k[4:]
+            elif k.startswith('steptime'):
+                rest = k[8:]
+            else:
+                continue
+            digits = []
+            for ch_ in rest:
+                if ch_.isdigit():
+                    digits.append(ch_)
+                else:
+                    break
+            if digits:
+                cand.add(int(''.join(digits)))
 
-        # Only accept indices that have both a step and a steptime.
-        return sorted(step_idx.intersection(time_idx))
+        out = []
+        for n in sorted(cand):
+            has_step = self._get_param_value(f'step{n}', default=None,
+                                             chan=chan) is not None
+            has_time = self._get_param_value(f'steptime{n}', default=None,
+                                             chan=chan) is not None
+            if has_step and has_time:
+                out.append(n)
+        return out
 
     def _read_steps_for_chan(self, chan):
         """Read and sort step pairs for a given channel.
@@ -132,17 +121,15 @@ class StepModel(Model):
             A list of ``(t_step, step)`` pairs sorted by ``t_step``.
         """
         idxs = self._index_set_for_chan(chan)
-        sfx = self._suffix_by_chan[chan]
         pairs = []
 
         for n in idxs:
-            # Build exact keys using the per-channel suffix.
-            k_step = f"step{n}{sfx}"
-            k_time = f"steptime{n}{sfx}"
-            step = self._get_param_value(k_step)
-            tstep = self._get_param_value(k_time)
-
-            if step == 0.0:
+            # Resolve values for this channel (None if missing)
+            step = self._get_param_value(f'step{n}', default=None,
+                                         chan=chan)
+            tstep = self._get_param_value(f'steptime{n}', default=None,
+                                          chan=chan)
+            if step is None or tstep is None or step == 0.0:
                 continue
             pairs.append((tstep, step))
 
@@ -186,7 +173,7 @@ class StepModel(Model):
             lcpiece = np.ma.ones(t.shape)
             for tstep, step in self._read_steps_for_chan(chan):
                 mask = t >= tstep
-                lcpiece[mask] = lcpiece[mask] + step
+                lcpiece[mask] += step
 
             lcpiece = np.ma.masked_where(np.ma.getmaskarray(t), lcpiece)
             pieces.append(lcpiece)

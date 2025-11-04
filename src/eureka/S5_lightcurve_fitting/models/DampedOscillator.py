@@ -21,36 +21,6 @@ class DampedOscillatorModel(Model):
         # Define model type (physical, systematic, other)
         self.modeltype = 'physical'
 
-        # Build suffix per real channel id for param key lookup.
-        # Supports optional _ch# and _wl# suffixes.
-        self._suffix_by_chan = {}
-        for chan, wl in zip(self.fitted_channels, self.wl_groups):
-            suffix = ''
-            if chan > 0:
-                suffix += f'_ch{chan}'
-            if wl > 0:
-                suffix += f'_wl{wl}'
-            self._suffix_by_chan[chan] = suffix
-
-    def _read_params_for_chan(self, chan):
-        """Return oscillator params for the given channel.
-
-        Returns
-        -------
-        tuple
-            (amp0, amp_decay, per0, per_decay, t0, t1)
-        """
-        sfx = self._suffix_by_chan.get(chan)
-
-        amp0 = self._get_param_value(f'osc_amp{sfx}')
-        amp_decay = self._get_param_value(f'osc_amp_decay{sfx}')
-        per0 = self._get_param_value(f'osc_per{sfx}')
-        per_decay = self._get_param_value(f'osc_per_decay{sfx}')
-        t0 = self._get_param_value(f'osc_t0{sfx}')
-        t1 = self._get_param_value(f'osc_t1{sfx}')
-
-        return amp0, amp_decay, per0, per_decay, t0, t1
-
     def eval(self, channel=None, **kwargs):
         """Evaluate the model at the current (or provided) times.
 
@@ -80,16 +50,20 @@ class DampedOscillatorModel(Model):
             if self.multwhite:
                 t = split([t], self.nints, chan_id)[0]
 
-            (amp0, amp_decay, per0, per_decay, t0, t1) = \
-                self._read_params_for_chan(chan_id)
+            # Get the coefficients for this channel
+            amp0 = self._get_param_value('osc_amp', chan=chan_id)
+            amp_decay = self._get_param_value('osc_amp_decay', chan=chan_id)
+            per0 = self._get_param_value('osc_per', chan=chan_id)
+            per_decay = self._get_param_value('osc_per_decay', chan=chan_id)
+            t0 = self._get_param_value('osc_t0', chan=chan_id)
+            t1 = self._get_param_value('osc_t1', chan=chan_id)
 
             amp = amp0 * np.exp(-amp_decay * (t - t0))
             per = per0 * np.exp(-per_decay * (t - t0))
-            osc = 1. + amp * np.sin(2 * np.pi * (t - t1) / per)
+            lcpiece = 1. + amp * np.sin(2 * np.pi * (t - t1) / per)
             # Force pre-t0 region to unity.
-            osc[t < t0] = 1.
-
-            pieces.append(osc)
+            lcpiece[t < t0] = 1.
+            pieces.append(lcpiece)
 
         if len(pieces) == 1:
             return pieces[0]

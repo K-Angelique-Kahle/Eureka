@@ -56,16 +56,6 @@ class GPModel(Model):
         # Define model type (physical, systematic, other)
         self.modeltype = 'GP'
 
-        # Per-channel suffix for param key lookup: _ch# and optional _wl#.
-        self._suffix_by_chan = {}
-        for chan, wl in zip(self.fitted_channels, self.wl_groups):
-            sfx = ''
-            if chan > 0:
-                sfx += f'_ch{chan}'
-            if wl > 0:
-                sfx += f'_wl{wl}'
-            self._suffix_by_chan[chan] = sfx
-
         # Do some initial sanity checks and raise errors if needed
         if self.gp_code_name == 'celerite':
             if self.nkernels > 1:
@@ -148,6 +138,10 @@ class GPModel(Model):
                 gp = self.setup_GP(chan)
             else:
                 gp = input_gp
+                # If caller passed a pre-built GP, we may still need
+                # to the compute inputs.
+                if self.kernel_inputs is None:
+                    self.setup_inputs()
 
             if self.gp_code_name == 'george':
                 kin = self.kernel_inputs[chan][:, good].T
@@ -181,7 +175,8 @@ class GPModel(Model):
         Currently supports only 'time' as an input dimension. When
         normalize=True, inputs are standardized to zero mean and unit std.
         """
-        self.kernel_inputs = []
+        # Store by real channel id to avoid index mismatches.
+        self.kernel_inputs = {}
         for c in range(self.nchannel_fitted):
             if self.nchannel_fitted > 1:
                 chan = self.fitted_channels[c]
@@ -211,7 +206,7 @@ class GPModel(Model):
 
                 kin_chan = np.ma.append(kin_chan, x[np.newaxis], axis=0)
 
-            self.kernel_inputs.append(kin_chan)
+            self.kernel_inputs[chan] = kin_chan
 
     def setup_GP(self, c=0):
         """Construct the GP object for channel index c.
@@ -281,14 +276,11 @@ class GPModel(Model):
             When an unsupported kernel/backend combination is requested.
         """
         # Read per-kernel, per-channel params on demand using suffix rules.
-        # A{ki}{sfx}, m{ki}{sfx} where ki = '' for k==0 else '1','2',...
+        # A{ki}, m{ki} where ki = '' for k==0 else '1','2',...
         chan = self.fitted_channels[c] if self.nchannel_fitted > 1 else 0
-        sfx = self._suffix_by_chan.get(chan, '')
         ki = '' if k == 0 else str(k)
-        amp_key = f'A{ki}{sfx}'
-        met_key = f'm{ki}{sfx}'
-        amp_log = self._get_param_value(amp_key)
-        metric_log = self._get_param_value(met_key)
+        amp_log = self._get_param_value(f'A{ki}', chan=chan)
+        metric_log = self._get_param_value(f'm{ki}', chan=chan)
 
         if self.gp_code_name == 'george':
             amp = np.exp(amp_log)

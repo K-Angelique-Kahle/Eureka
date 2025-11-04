@@ -23,69 +23,6 @@ class LorentzianModel(Model):
         # Define model type (physical, systematic, other)
         self.modeltype = 'physical'
 
-        # Build per-channel suffix for param key lookup (_ch#/_wl#).
-        self._suffix_by_chan = {}
-        for chan, wl in zip(self.fitted_channels, self.wl_groups):
-            sfx = ''
-            if chan > 0:
-                sfx += f'_ch{chan}'
-            if wl > 0:
-                sfx += f'_wl{wl}'
-            self._suffix_by_chan[chan] = sfx
-
-    def _get_optional(self, key):
-        """Return float value for param key or None if missing/invalid.
-
-        Based on _get_param_value, but allows for missing parameters.
-
-        Parameters
-        ----------
-        key : str
-            Parameter key to look up.
-        """
-        if getattr(self, "parameters", None) is None:
-            return None
-
-        val = getattr(self.parameters, key, None)
-        if val is None:
-            return None
-
-        if hasattr(val, "value"):
-            val = val.value
-
-        try:
-            out = float(val)
-        except (TypeError, ValueError, OverflowError):
-            return None
-
-        return out
-
-    def _read_params_for_chan(self, chan):
-        """Read Lorentzian params for a channel.
-
-        Parameters
-        ----------
-        chan : int
-            Channel index.
-
-        Returns
-        -------
-        tuple
-            Parameters tuple with possible None values.
-        """
-        sfx = self._suffix_by_chan.get(chan, '')
-
-        params = (self._get_optional(f'lor_amp{sfx}'),
-                  self._get_optional(f'lor_amp_lhs{sfx}'),
-                  self._get_optional(f'lor_amp_rhs{sfx}'),
-                  self._get_optional(f'lor_hwhm{sfx}'),
-                  self._get_optional(f'lor_hwhm_lhs{sfx}'),
-                  self._get_optional(f'lor_hwhm_rhs{sfx}'),
-                  self._get_param_value(f'lor_t0{sfx}', 0.),
-                  self._get_param_value(f'lor_power{sfx}', 2.))
-
-        return params
-
     def eval(self, channel=None, **kwargs):
         """Evaluate the function with the given values.
 
@@ -118,8 +55,17 @@ class LorentzianModel(Model):
             if self.multwhite:
                 t = split([t], self.nints, chan)[0]
 
-            amp, amp_lhs, amp_rhs, hwhm, hwhm_lhs, hwhm_rhs, t0, power = \
-                self._read_params_for_chan(chan)
+            # Get the coefficients for this channel
+            # Optional params (may be undefined, which results in None)
+            amp = self._get_param_value('lor_amp', None, chan=chan)
+            amp_lhs = self._get_param_value('lor_amp_lhs', None, chan=chan)
+            amp_rhs = self._get_param_value('lor_amp_rhs', None, chan=chan)
+            hwhm = self._get_param_value('lor_hwhm', None, chan=chan)
+            hwhm_lhs = self._get_param_value('lor_hwhm_lhs', None, chan=chan)
+            hwhm_rhs = self._get_param_value('lor_hwhm_rhs', None, chan=chan)
+            # Required / defaulted params
+            t0 = self._get_param_value('lor_t0', 0.0, chan=chan)
+            power = self._get_param_value('lor_power', 2.0, chan=chan)
 
             # Branch selection:
             # A) Symmetric: amp & hwhm set; no side-specific params.

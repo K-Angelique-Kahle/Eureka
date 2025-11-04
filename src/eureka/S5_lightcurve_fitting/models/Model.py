@@ -7,6 +7,7 @@ from ..utils import COLORS
 from ...lib.readEPF import Parameters
 from ...lib.split_channels import split
 from ...lib import plots
+from ...lib.util import resolve_param_key
 
 
 class Model:
@@ -79,27 +80,74 @@ class Model:
         nchan = len(channels)
         return nchan, channels
 
-    def _get_param_value(self, key, default=0.):
-        """Safely extract a scalar parameter value from self.parameters.
+    def _wl_for_chan(self, chan):
+        """Return wavelength-group id aligned with ``self.fitted_channels``.
 
-        Works with Parameters objects (having .value) or plain numerics.
+        Parameters
+        ----------
+        chan : int
+            Real channel id present in ``self.fitted_channels``.
+
+        Returns
+        -------
+        int
+            Wavelength-group id for this channel.
         """
-        # No parameters object at all
-        if getattr(self, "parameters", None) is None:
-            return float(default)
+        idx = self.fitted_channels.index(chan)
+        return self.wl_groups[idx]
 
+    def _get_param_value(self, base, default=0.0, *, chan=0, wl=None, pid=0):
+        """Resolve a parameter key (wl > ch > base) and return its value.
+
+        Parameters
+        ----------
+        base : str
+            Base parameter name (e.g., 'c0', 'r0', 'A').
+        default : float or None; optional
+            Fallback value if the parameter is missing. If ``None``,
+            return ``None`` when unresolved or uncastable. Default 0.0.
+        chan : int; optional
+            Channel id to resolve against. Default 0.
+        wl : int; optional
+            Wavelength-group id. If None, inferred from ``chan``. Default
+            None.
+        pid : int; optional
+            Planet id for astrophysical parameters (0 for none). Default 0.
+
+        Returns
+        -------
+        float or None
+            Scalar numeric value, or ``None`` if ``default is None`` and the
+            key is missing or cannot be cast to float.
+        """
+        params = getattr(self, "parameters", None)
+
+        if params is None:
+            # No parameters object at all
+            return None if default is None else float(default)
+
+        if wl is None:
+            wl = self._wl_for_chan(chan) if chan in self.fitted_channels else 0
+
+        key = resolve_param_key(base, params, pid=pid, channel=chan, wl=wl)
         val = getattr(self.parameters, key, default)
+
+        # If unresolved and caller asked for None, propagate None.
+        if val is default and default is None:
+            return None
 
         # Parameters objects have a .value attribute
         if hasattr(val, "value"):
-            return float(val.value)
+            val = val.value
 
-        # Numpy scalar or size-1 array
-        if isinstance(val, (np.ma.MaskedArray, np.ndarray)):
-            return float(np.asanyarray(val).reshape(-1)[0])
-
-        # Plain number or something else castable
-        return float(val)
+        # Attempt robust float cast (handles numpy scalars/arrays)
+        try:
+            arr = np.asanyarray(val)
+            if arr.shape == () or arr.size == 1:
+                return float(arr.reshape(-1)[0])
+            return float(arr.flat[0])
+        except (TypeError, ValueError):
+            return None if default is None else float(default)
 
     def __mul__(self, other):
         """Multiply model components to make a combined model.
@@ -300,7 +348,7 @@ class Model:
         share : bool; optional
             Whether or not this model is a shared model. Defaults to False.
         chan : int; optional
-            The current channel number. Detaults to 0.
+            The current channel number. Defaults to 0.
         **kwargs : dict
             Additional parameters to pass to plot and self.eval().
         """

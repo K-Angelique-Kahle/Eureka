@@ -34,17 +34,6 @@ class CentroidModel(Model):
         # Define model type (physical, systematic, other)
         self.modeltype = 'systematic'
 
-        # Build per-channel coefficient keys keyed by real channel id (avoids
-        # indexing mismatches when fitted_channels != range(nchannel_fitted))
-        self.coeff_keys = {}
-        for chan, wl in zip(self.fitted_channels, self.wl_groups):
-            key = self.axis
-            if chan > 0:
-                key += f'_ch{chan}'
-            if wl > 0:
-                key += f'_wl{wl}'
-            self.coeff_keys[chan] = key
-
     @property
     def centroid(self):
         """A getter for the centroid."""
@@ -107,8 +96,8 @@ class CentroidModel(Model):
                 # Split the arrays that have lengths of the original time axis
                 centroid = split([centroid, ], self.nints, chan)[0]
 
-            coeff_key = self.coeff_keys.get(chan, self.axis)
-            coeff = self._get_param_value(coeff_key, 0.0)
+            # Get the coefficient for this channel
+            coeff = self._get_param_value(self.axis, 0.0, chan=chan)
             lcpiece = 1. + centroid*coeff
             pieces.append(lcpiece)
 

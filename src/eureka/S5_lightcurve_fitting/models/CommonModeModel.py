@@ -12,6 +12,11 @@ class CommonModeModel(Model):
 
         Parameters
         ----------
+        meta : eureka.lib.readECF.MetaClass
+            The current metadata object. Must have ``common_mode_file``
+            and ``common_mode_name`` attributes.
+        log : logedit.Logedit
+            The current log in which to output messages from this function.
         **kwargs : dict
             Additional parameters to pass to
             eureka.S5_lightcurve_fitting.models.Model.__init__().
@@ -27,20 +32,7 @@ class CommonModeModel(Model):
         # Define model type (physical, systematic, other)
         self.modeltype = 'systematic'
 
-        # Build per-channel coefficient keys keyed by real channel id.
-        # Coefficients: cm1, cm2 (+ optional _ch# and _wl# suffixes).
-        self.cm_keys_per_chan = {}
-        for chan, wl in zip(self.fitted_channels, self.wl_groups):
-            suffix = ''
-            if chan > 0:
-                suffix += f'_ch{chan}'
-            if wl > 0:
-                suffix += f'_wl{wl}'
-            self.cm_keys_per_chan[chan] = [f'cm1{suffix}', f'cm2{suffix}']
-
-        # Read common-mode systematics (typically from Stage 5 white LC).
-        log = kwargs.get('log')
-        meta = kwargs.get('meta')
+        # Read common-mode systematics (typically from Stage 5 white LC)
         if (not hasattr(meta, 'common_mode_file') or
                 not hasattr(meta, 'common_mode_name')):
             raise ValueError("meta must define 'common_mode_file' and "
@@ -78,13 +70,6 @@ class CommonModeModel(Model):
         else:
             self.time_local = self._time - self._time.mean()
 
-    def _read_coeffs_for_chan(self, chan):
-        """Read (cm1, cm2) for the requested channel."""
-        keys = self.cm_keys_per_chan[chan]
-        cm1 = self._get_param_value(keys[0], 0.0)
-        cm2 = self._get_param_value(keys[1], 0.0)
-        return cm1, cm2
-
     def eval(self, channel=None, **kwargs):
         """Evaluate the function with the given values.
 
@@ -113,15 +98,17 @@ class CommonModeModel(Model):
                 chan = 0
 
             time = self.time_local
+            cm_flux = self.cm_flux
             if self.multwhite:
                 # Split the arrays that have lengths of the original time axis
-                time, cm_flux = split([time, self.cm_flux],
-                                      self.nints, chan)[0]
+                time, cm_flux = split([time, cm_flux], self.nints, chan)
 
-            cm1, cm2 = self._read_coeffs_for_chan(chan)
+            # Get the coefficients for this channel
+            cm1 = self._get_param_value('cm1', 0.0, chan=chan)
+            cm2 = self._get_param_value('cm2', 0.0, chan=chan)
             lcpiece = 1. + cm1*cm_flux + cm2*cm_flux**2
 
-            # Respect any time mask.
+            # Respect any time mask
             lcpiece = np.ma.masked_where(np.ma.getmaskarray(time), lcpiece)
             pieces.append(lcpiece)
 

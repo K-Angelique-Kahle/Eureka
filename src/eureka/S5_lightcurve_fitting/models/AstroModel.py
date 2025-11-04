@@ -7,7 +7,6 @@ from .Model import Model
 from .KeplerOrbit import KeplerOrbit
 from ..limb_darkening_fit import ld_profile
 from ...lib.split_channels import split
-from ...lib.util import resolve_param_key
 
 
 class PlanetParams():
@@ -140,18 +139,14 @@ class PlanetParams():
         else:
             self.ydeg = 0
 
-        # ----- Local helper for wl>ch>base resolution ------------------------
+        # ----- Local helper: use Model._get_param_value (wl > ch > base) -----
         def _get_param(base, pid_override=None):
-            """Return value for base at (pid, channel, wl) or None."""
+            """Return float value for base at (pid, channel, wl) or None."""
             pid_use = self.pid if pid_override is None else pid_override
-            key = resolve_param_key(
-                base, model.parameters, pid=pid_use,
-                channel=self.channel, wl=self.wl
+            return model._get_param_value(
+                base, default=None,
+                chan=self.channel, wl=self.wl, pid=pid_use
             )
-            if key in model.parameters.dict:
-                val = getattr(parameterObject, key)
-                return val.value if eval else val
-            return None
         # ---------------------------------------------------------------------
 
         # Load in values using resolver; keep defaults if not found
@@ -264,21 +259,24 @@ class PlanetParams():
         if 'Rs' in model.parameters.dict:
             ptype_Rs = model.parameters.dict['Rs'][1]
             if ptype_Rs == 'free':
-                rs_key = resolve_param_key('Rs', model.parameters,
-                                           channel=self.channel, wl=self.wl)
+                # Resolve per-channel/wavelength if 'free'
+                value = model._get_param_value('Rs', default=None,
+                                               chan=self.channel, wl=self.wl)
             else:
-                rs_key = 'Rs'
-
-            try:
-                value = getattr(parameterObject, rs_key)
-            except AttributeError:
+                # Fixed: use base Rs
+                try:
+                    if eval:
+                        value = parameterObject.Rs.value
+                    else:
+                        value = parameterObject.Rs
+                except AttributeError:
+                    value = None
+            if value is None:
                 msg = ('Missing required parameter Rs in your EPF. '
                        'Make sure it is not set to "independent" as this is '
                        'no longer supported; set it to "fixed" to keep the '
                        'old "independent" behavior.')
                 raise AssertionError(msg)
-            if eval:
-                value = value.value
             self.Rs = value
 
         # Nicely packaging limb-darkening coefficients
@@ -443,7 +441,7 @@ class AstroModel(Model):
 
             starFlux = np.ma.ones(len(time))
             for component in self.stellar_models:
-                starFlux *= component.eval(channel=chan, eval=eval, **kwargs)
+                starFlux *= component.eval(channel=chan, **kwargs)
             if self.transit_model is not None:
                 starFlux *= self.transit_model.eval(channel=chan,
                                                     pid=pid_input,

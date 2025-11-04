@@ -22,19 +22,6 @@ class HSTRampModel(Model):
         # Define model type (physical, systematic, other)
         self.modeltype = 'systematic'
 
-        # Build per-channel coefficient keys keyed by real channel id.
-        # Coeffs: h0..h5 (+ optional _ch#/_wl# suffixes).
-        self.h_keys_per_chan = {}
-        for chan, wl in zip(self.fitted_channels, self.wl_groups):
-            suffix = ''
-            if chan > 0:
-                suffix += f'_ch{chan}'
-            if wl > 0:
-                suffix += f'_wl{wl}'
-            self.h_keys_per_chan[chan] = [f'h0{suffix}', f'h1{suffix}',
-                                          f'h2{suffix}', f'h3{suffix}',
-                                          f'h4{suffix}', f'h5{suffix}']
-
     @property
     def time(self):
         """A getter for the time."""
@@ -88,7 +75,7 @@ class HSTRampModel(Model):
             self.time = kwargs.get('time')
 
         pieces = []
-        for c in np.arange(nchan):
+        for c in range(nchan):
             if self.nchannel_fitted > 1:
                 chan = channels[c]
             else:
@@ -99,7 +86,13 @@ class HSTRampModel(Model):
                 # Split the arrays that have lengths of the original time axis
                 t = split([t, ], self.nints, chan)[0]
 
-            h0, h1, h2, h3, h4, h5 = self._read_coeffs_for_chan(chan)
+            # Get the coefficients for this channel
+            h0 = self._get_param_value('h0', 0.0, chan=chan)
+            h1 = self._get_param_value('h1', 0.0, chan=chan)
+            h2 = self._get_param_value('h2', 0.0, chan=chan)
+            h3 = self._get_param_value('h3', 0.0, chan=chan)
+            h4 = self._get_param_value('h4', 0.0, chan=chan)
+            h5 = self._get_param_value('h5', 0.0, chan=chan)
 
             # Batch time is relative to the start of each HST orbit
             # h4 = orbital period (~96 min), h5 = phase offset.
