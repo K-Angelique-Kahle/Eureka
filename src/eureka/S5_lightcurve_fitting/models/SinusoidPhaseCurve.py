@@ -64,7 +64,6 @@ class SinusoidPhaseCurveModel(Model):
                 chan = channels[c]
             else:
                 chan = 0
-            wl = self.wl_groups[chan] if self.wl_groups is not None else 0
 
             time = self.time
             if self.multwhite:
@@ -73,7 +72,7 @@ class SinusoidPhaseCurveModel(Model):
 
             for pid in pid_iter:
                 # Initialize model
-                pl_params = PlanetParams(self, pid, chan, wl)
+                pl_params = PlanetParams(self, pid, chan)
 
                 if (pl_params.AmpCos1 == 0 and pl_params.AmpSin1 == 0 and
                         pl_params.AmpCos2 == 0 and pl_params.AmpSin2 == 0):

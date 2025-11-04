@@ -106,7 +106,6 @@ class PoetPCModel(Model):
                 chan = channels[c]
             else:
                 chan = 0
-            wl = self.wl_groups[chan] if self.wl_groups is not None else 0
 
             time = self.time
             if self.multwhite:
@@ -115,7 +114,7 @@ class PoetPCModel(Model):
 
             for pid in pid_iter:
                 # Initialize planet
-                poet_params = PlanetParams(self, pid, chan, wl)
+                poet_params = PlanetParams(self, pid, chan)
 
                 if poet_params.t_secondary is None:
                     # If not explicitly fitting for the time of eclipse, get

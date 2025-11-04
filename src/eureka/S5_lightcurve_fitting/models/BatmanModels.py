@@ -107,7 +107,6 @@ class BatmanTransitModel(Model):
                 chan = channels[c]
             else:
                 chan = 0
-            wl = self.wl_groups[chan] if self.wl_groups is not None else 0
 
             time = self.time
             if self.multwhite:
@@ -117,7 +116,7 @@ class BatmanTransitModel(Model):
             light_curve = np.ma.ones(len(time))
             for pid in pid_iter:
                 # Initialize planet
-                pl_params = PlanetParams(self, pid, chan, wl)
+                pl_params = PlanetParams(self, pid, chan)
 
                 # Enforce physicality to avoid crashes from batman by returning
                 # something that should be a horrible fit
@@ -247,7 +246,6 @@ class BatmanEclipseModel(Model):
                 chan = channels[c]
             else:
                 chan = 0
-            wl = self.wl_groups[chan] if self.wl_groups is not None else 0
 
             time = self.time
             if self.multwhite:
@@ -257,7 +255,7 @@ class BatmanEclipseModel(Model):
             light_curve = np.ma.zeros(len(time))
             for pid in pid_iter:
                 # Initialize planet
-                pl_params = PlanetParams(self, pid, chan, wl)
+                pl_params = PlanetParams(self, pid, chan)
 
                 # Enforce physicality to avoid crashes
                 if not ((0 < pl_params.per) and (0 < pl_params.inc < 90) and
