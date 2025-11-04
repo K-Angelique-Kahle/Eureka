@@ -305,6 +305,9 @@ class PlanetParams():
         else:
             self.fleck_fast = False
 
+        if self.spotnpts is not None:
+            self.spotnpts = int(self.spotnpts)
+
         self.inc_rad = self.inc * np.pi / 180
         self.w_rad = self.w * np.pi / 180
 
