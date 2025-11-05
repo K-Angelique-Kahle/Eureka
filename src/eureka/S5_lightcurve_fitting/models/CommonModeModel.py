@@ -91,12 +91,7 @@ class CommonModeModel(Model):
             self.time = kwargs.get('time')
 
         pieces = []
-        for c in range(nchan):
-            if self.nchannel_fitted > 1:
-                chan = channels[c]
-            else:
-                chan = 0
-
+        for chan in channels:
             time = self.time_local
             cm_flux = self.cm_flux
             if self.multwhite:

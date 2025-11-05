@@ -103,9 +103,8 @@ class GPModel(Model):
             self.time = kwargs.get('time')
 
         lcfinal = np.ma.array([])
-        for c in range(nchan):
+        for chan in channels:
             if self.nchannel_fitted > 1:
-                chan = channels[c]
                 # get flux and uncertainties for current channel
                 flux, unc_fit = split([self.flux, self.unc_fit],
                                       self.nints, chan)
@@ -116,7 +115,6 @@ class GPModel(Model):
                     # that channel's fitted model will be passed in
                     fit_temp = fit_lc
             else:
-                chan = 0
                 # get flux and uncertainties for current channel
                 flux = self.flux
                 fit_temp = fit_lc
@@ -354,9 +352,8 @@ class GPModel(Model):
         nchan, channels = self._channels(channel)
 
         logL = 0.
-        for c in range(nchan):
+        for chan in channels:
             if self.nchannel_fitted > 1:
-                chan = channels[c]
                 # get flux and uncertainties for current channel
                 flux, unc_fit = split([self.flux, self.unc_fit],
                                       self.nints, chan)
@@ -367,7 +364,6 @@ class GPModel(Model):
                     # that channel's fitted model will be passed in
                     fit_temp = fit_lc
             else:
-                chan = 0
                 # get flux and uncertainties for current channel
                 flux = self.flux
                 fit_temp = fit_lc

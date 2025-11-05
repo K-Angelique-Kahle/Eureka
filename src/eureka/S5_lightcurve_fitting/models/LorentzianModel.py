@@ -45,12 +45,7 @@ class LorentzianModel(Model):
             self.time = kwargs.get('time')
 
         pieces = []
-        for c in range(nchan):
-            if self.nchannel_fitted > 1:
-                chan = channels[c]
-            else:
-                chan = 0
-
+        for chan in channels:
             t = self.time
             if self.multwhite:
                 t = split([t], self.nints, chan)[0]

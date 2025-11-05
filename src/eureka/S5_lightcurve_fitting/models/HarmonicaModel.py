@@ -59,12 +59,7 @@ class HarmonicaTransitModel(BatmanTransitModel):
 
         # Set all parameters
         lcfinal = np.array([])
-        for c in range(nchan):
-            if self.nchannel_fitted > 1:
-                chan = channels[c]
-            else:
-                chan = 0
-
+        for chan in channels:
             time = self.time
             if self.multwhite:
                 # Split the arrays that have lengths of the original time axis

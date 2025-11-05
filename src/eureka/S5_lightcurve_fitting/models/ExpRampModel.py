@@ -75,12 +75,7 @@ class ExpRampModel(Model):
 
         # Create the ramp from the coeffs
         pieces = []
-        for c in range(nchan):
-            if self.nchannel_fitted > 1:
-                chan = channels[c]
-            else:
-                chan = 0
-
+        for chan in channels:
             t = self.time_local
             if self.multwhite:
                 # Split arrays that have lengths of the original time axis

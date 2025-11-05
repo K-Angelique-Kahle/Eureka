@@ -85,12 +85,7 @@ class CentroidModel(Model):
 
         # Create the centroid model for each wavelength
         pieces = []
-        for c in range(nchan):
-            if self.nchannel_fitted > 1:
-                chan = channels[c]
-            else:
-                chan = 0
-
+        for chan in channels:
             centroid = self.centroid_local
             if self.multwhite:
                 # Split the arrays that have lengths of the original time axis

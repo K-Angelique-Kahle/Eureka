@@ -119,7 +119,7 @@ class Model:
             )
         return self.wl_groups[pos]
 
-    def _get_param_value(self, base, default=0.0, *, chan=0, pid=0):
+    def _get_param_value(self, base, default=0.0, *, chan=0, wl=None, pid=0):
         """Resolve a parameter key (wl > ch > base) and return its value.
 
         Parameters
@@ -131,6 +131,10 @@ class Model:
             return ``None`` when unresolved or uncastable. Default 0.0.
         chan : int; optional
             Channel id to resolve against. Default 0.
+        wl : int or None; optional
+            Wavelength-group id. If None, it will be inferred from ``chan``.
+            Pass ``wl=0`` to target the base (unsuffixed) key without
+            consulting the channel-to-wavelength map.
         pid : int; optional
             Planet id for astrophysical parameters (0 for none). Default 0.
 
@@ -146,7 +150,16 @@ class Model:
             # No parameters object at all
             return None if default is None else float(default)
 
-        wl = self._wl_for_chan(chan)
+        if wl is None:
+            # Infer wl from chan; raise with guidance if chan isn't present.
+            try:
+                wl = self._wl_for_chan(chan)
+            except ValueError as e:
+                raise ValueError(
+                    f"_get_param_value({base!r}): cannot infer wl for "
+                    f"chan={chan}; pass wl explicitly (e.g., wl=0 for base)."
+                ) from e
+
         key = resolve_param_key(base, params, pid=pid, channel=chan, wl=wl)
         val = getattr(self.parameters, key, default)
 

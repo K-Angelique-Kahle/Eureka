@@ -132,11 +132,12 @@ class PlanetParams():
             self.ydeg = 0
 
         # ------------- Local helper: use Model._get_param_value --------------
-        def _get_param(base, chan_override=None, pid_override=None):
+        def _get_param(base, chan_override=None, pid_override=None,
+                       wl_override=None):
             pid_use = self.pid if pid_override is None else pid_override
             chan_use = self.channel if chan_override is None else chan_override
-            return model._get_param_value(base, default=None,
-                                          chan=chan_use, pid=pid_use)
+            return model._get_param_value(base, default=None, chan=chan_use,
+                                          wl=wl_override, pid=pid_use)
         # ---------------------------------------------------------------------
 
         # Load in values using resolver; keep defaults if not found
@@ -249,11 +250,13 @@ class PlanetParams():
         if 'Rs' in model.parameters.dict:
             ptype_Rs = model.parameters.dict['Rs'][1]
             if ptype_Rs == 'free':
-                # Resolve per-channel/wavelength if 'free'
+                # Per-channel/wavelength: use current (chan, inferred wl)
                 value = _get_param('Rs', pid_override=0)
             else:
-                # Fixed: use base Rs
-                value = _get_param('Rs', chan_override=0, pid_override=0)
+                # Fixed: force the *base* (unsuffixed) Rs by setting wl=0
+                # (and chan=0 merely for completeness).
+                value = _get_param('Rs', chan_override=0, wl_override=0,
+                                   pid_override=0)
             if value is None:
                 msg = ('Missing required parameter Rs in your EPF. '
                        'Make sure it is not set to "independent" as this is '
@@ -414,12 +417,7 @@ class AstroModel(Model):
 
         # Set all parameters
         lcfinal = np.ma.zeros(0)
-        for c in range(nchan):
-            if self.nchannel_fitted > 1:
-                chan = channels[c]
-            else:
-                chan = 0
-
+        for chan in channels:
             time = self.time
             if self.multwhite:
                 # Split the arrays that have lengths of the original time axis
