@@ -379,7 +379,8 @@ class Model:
         share : bool; optional
             Whether or not this model is a shared model. Defaults to False.
         chan : int; optional
-            The current channel number. Defaults to 0.
+            The real channel id to render. `LightCurve.plot()` passes the
++            correct value; this function now always respects it.
         **kwargs : dict
             Additional parameters to pass to plot and self.eval().
         """
@@ -388,16 +389,23 @@ class Model:
             fig = plt.figure(5103, figsize=(8, 6))
             ax = fig.gca()
 
+        # Validate channel choice (helps catch accidental chan=0 when fitting
+        # a nonzero channel)
+        try:
+            fc = np.asarray(self.fitted_channels).reshape(-1)
+            if fc.size and (chan not in fc):
+                raise ValueError(
+                    f"Model.plot: chan={chan} not in fitted_channels {fc!r}")
+        except Exception:
+            # If fitted_channels is not set/array-like, skip this guard.
+            pass
+
         # Plot the model
         label = self.fitter
         if self.name != self.default_name:
             label += ': '+self.name
 
-        if not share and not self.multwhite:
-            channel = 0
-        else:
-            channel = chan
-        model = self.eval(channel=channel, incl_GP=True, **kwargs)
+        model = self.eval(channel=chan, incl_GP=True, **kwargs)
 
         time = self.time
         if self.multwhite:
