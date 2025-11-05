@@ -54,6 +54,6 @@ dependencies:
         - scipy>=1.8.0 # Lower limit needed for scipy.spatial.QhullError
         - setuptools_scm # Needed for version number
         - sphinx-rtd-theme # Needed for documentation
-        - stcal>=1.12.0 # Lower limit needed for stcal.ramp_fitting.likely_fit
+        - stcal>=1.15.2 # Lower limit needed for updated stcal.ramp_fitting.ramp_fit.ramp_fit arguments
         - stdatamodels
         - svo_filters
