@@ -175,11 +175,7 @@ class GPModel(Model):
         """
         # Store by real channel id to avoid index mismatches.
         self.kernel_inputs = {}
-        for c in range(self.nchannel_fitted):
-            if self.nchannel_fitted > 1:
-                chan = self.fitted_channels[c]
-            else:
-                chan = 0
+        for chan in self.fitted_channels:
             time = self.time
             if self.multwhite:
                 # Split the arrays that have lengths of the original time axis
@@ -206,12 +202,12 @@ class GPModel(Model):
 
             self.kernel_inputs[chan] = kin_chan
 
-    def setup_GP(self, c=0):
+    def setup_GP(self, chan=0):
         """Construct the GP object for channel index c.
 
         Parameters
         ----------
-        c : int; optional
+        chan : int; optional
             The current channel index. Defaults to 0.
 
         Returns
@@ -223,9 +219,9 @@ class GPModel(Model):
             self.setup_inputs()
 
         # Build kernel as a sum over per-kernel components
-        kernel = self.get_kernel(self.kernel_types[0], 0, c)
+        kernel = self.get_kernel(self.kernel_types[0], 0, chan)
         for k in range(1, self.nkernels):
-            kernel += self.get_kernel(self.kernel_types[k], k, c)
+            kernel += self.get_kernel(self.kernel_types[k], k, chan)
 
         # Make the gp object
         if self.gp_code_name == 'george':
@@ -239,10 +235,6 @@ class GPModel(Model):
         elif self.gp_code_name == 'tinygp':
             if tinygp is None:
                 raise RuntimeError('tinygp is not available.')
-            if self.nchannel_fitted > 1:
-                chan = self.fitted_channels[c]
-            else:
-                chan = 0
             gp = tinygp.GaussianProcess(kernel, self.kernel_inputs[chan].T,
                                         mean=0)
         else:
@@ -250,7 +242,7 @@ class GPModel(Model):
 
         return gp
 
-    def get_kernel(self, kernel_name, k, c=0):
+    def get_kernel(self, kernel_name, k, chan=0):
         """Return a backend-specific kernel instance.
 
         Parameters
@@ -260,8 +252,8 @@ class GPModel(Model):
             'Exp').
         k : int
             Kernel index (0-based).
-        c : int; optional
-            Channel index, default 0.
+        chan : int; optional
+            The current channel index. Defaults to 0.
 
         Returns
         -------
@@ -275,7 +267,6 @@ class GPModel(Model):
         """
         # Read per-kernel, per-channel params on demand using suffix rules.
         # A{ki}, m{ki} where ki = '' for k==0 else '1','2',...
-        chan = self.fitted_channels[c] if self.nchannel_fitted > 1 else 0
         ki = '' if k == 0 else str(k)
         amp_log = self._get_param_value(f'A{ki}', chan=chan)
         metric_log = self._get_param_value(f'm{ki}', chan=chan)

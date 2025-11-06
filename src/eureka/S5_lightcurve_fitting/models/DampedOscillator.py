@@ -43,9 +43,7 @@ class DampedOscillatorModel(Model):
             self.time = kwargs.get('time')
 
         pieces = []
-        for i in range(nchan):
-            chan_id = channels[i] if self.nchannel_fitted > 1 else 0
-
+        for chan_id in channels:
             t = self.time
             if self.multwhite:
                 t = split([t], self.nints, chan_id)[0]
