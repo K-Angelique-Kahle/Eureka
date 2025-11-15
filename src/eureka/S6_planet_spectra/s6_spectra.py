@@ -435,7 +435,7 @@ def parse_s5_saves(meta, log, fit_methods, channel_key='shared'):
         y_param = meta.y_param
 
     if 'dynesty' in fit_methods:
-        if hasattr(meta, 'run_dynamic') and meta.run_dynamic:
+        if meta.run_dynamic:
             fitter = 'dynamicdynesty'
         else:
             fitter = 'dynesty'
@@ -726,7 +726,7 @@ def load_s5_saves(meta, log, fit_methods, n_samples=1):
         A list of sample arrays, one for each channel.
     """
     if 'dynesty' in fit_methods:
-        if hasattr(meta, 'run_dynamic') and meta.run_dynamic:
+        if meta.run_dynamic:
             fitter = 'dynamicdynesty'
         else:
             fitter = 'dynesty'
