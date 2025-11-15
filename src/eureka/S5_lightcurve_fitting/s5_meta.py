@@ -47,7 +47,15 @@ class S5MetaClass(MetaClass):
         # Joint fit of multiple white lightcurves?
         self.multwhite = getattr(self, 'multwhite', False)
 
-        # Used to allow sharing of some parameters only between channels which
+        # Allow manual skipping of some channels during fitting
+        # Must be provided as a list of zero-indexed integers
+        self.skip_channels = getattr(self, 'skip_channels', None)
+        if self.skip_channels is None:
+            self.skip_channels = []
+        if not np.all([isinstance(ch, int) for ch in self.skip_channels]):
+            raise TypeError('meta.skip_channels must be a list of integers.')
+
+        # Used to allow sharing of some parameters only between channels that
         # share the same wavelength. Can be helpful for multwhite fits of data
         # from many different channels where some parameters are shared across
         # all channels (e.g. orbital parameters), while others are only shared

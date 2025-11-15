@@ -432,8 +432,13 @@ def fitlc(eventlabel, ecf_path=None, s4_meta=None, input_meta=None):
                                     "_Meta_Save"), save=[])
             else:
                 for channel in range(chanrng):
-                    log.writelog(f"\nStarting Channel {channel} of "
-                                 f"{chanrng}\n")
+                    if channel in meta.skip_channels:
+                        log.writelog(f"\nSkipping Channel {channel} as "
+                                     "requested.\n")
+                        continue
+                    else:
+                        log.writelog(f"\nStarting Channel {channel} of "
+                                     f"{chanrng}\n")
 
                     # Get the flux and error measurements for
                     # the current channel
