@@ -1,4 +1,4 @@
-name: eureka_temp
+name: eureka
 channels:
     - conda-forge
 dependencies:
