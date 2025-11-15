@@ -156,7 +156,7 @@ class Model:
                 wl = self._wl_for_chan(chan)
             except ValueError as e:
                 raise ValueError(
-                    f"_get_param_value({base!r}): cannot infer wl for "
+                    f"_get_param_value({base}): cannot infer wl for "
                     f"chan={chan}; pass wl explicitly (e.g., wl=0 for base)."
                 ) from e
 

@@ -10,7 +10,7 @@ class CentroidModel(Model):
     Linear decorrelation against x position (axis='xpos'), y position
     (axis='ypos'), x width (axis='xwidth'), or y width (axis='ywidth').
     """
-    def __init__(self, axis=None, **kwargs):
+    def __init__(self, axis, **kwargs):
         """Initialize the centroid model.
 
         Parameters
@@ -26,8 +26,8 @@ class CentroidModel(Model):
         """
         # Validate axis kwarg early
         if axis is None or axis not in ['xpos', 'ypos', 'xwidth', 'ywidth']:
-            raise ValueError("CentroidModel requires an 'axis' kwarg that is "
-                             "one of 'xpos', 'ypos', 'xwidth', or 'ywidth'.")
+            raise ValueError("CentroidModel requires an 'axis' argument set "
+                             "to 'xpos', 'ypos', 'xwidth', or 'ywidth'.")
         super().__init__(axis=axis, **kwargs)
         self.name = self.axis
 

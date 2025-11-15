@@ -7,7 +7,7 @@ from ...lib import astropytable
 
 class CommonModeModel(Model):
     """Common Mode Model"""
-    def __init__(self, meta=None, log=None, **kwargs):
+    def __init__(self, meta, log, **kwargs):
         """Initialize the common mode model.
 
         Parameters
@@ -20,12 +20,7 @@ class CommonModeModel(Model):
         **kwargs : dict
             Additional parameters to pass to
             eureka.S5_lightcurve_fitting.models.Model.__init__().
-            Expects 'meta' (with .common_mode_file and .common_mode_name)
-            and 'log'.
         """
-        if meta is None or log is None:
-            raise ValueError("CommonModeModel requires 'meta' and 'log' "
-                             "arguments.")
         super().__init__(**kwargs)
         self.name = 'common_mode'
 

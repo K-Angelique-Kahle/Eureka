@@ -137,7 +137,7 @@ class GPModel(Model):
             else:
                 gp = input_gp
                 # If caller passed a pre-built GP, we may still need
-                # to the compute inputs.
+                # to the compute the inputs.
                 if self.kernel_inputs is None:
                     self.setup_inputs()
 
@@ -332,7 +332,7 @@ class GPModel(Model):
         ----------
         fit_lc : ndarray
             The fitted (non-GP) model.
-        channel : int, optional
+        channel : int; optional
             If provided, evaluate only that channel. Defaults to None.
 
         Returns
