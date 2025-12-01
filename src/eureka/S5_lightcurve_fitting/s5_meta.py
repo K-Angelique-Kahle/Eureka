@@ -49,9 +49,7 @@ class S5MetaClass(MetaClass):
 
         # Allow manual skipping of some channels during fitting
         # Must be provided as a list of zero-indexed integers
-        self.skip_channels = getattr(self, 'skip_channels', None)
-        if self.skip_channels is None:
-            self.skip_channels = []
+        self.skip_channels = getattr(self, 'skip_channels', [])
         if not np.all([isinstance(ch, int) for ch in self.skip_channels]):
             raise TypeError('meta.skip_channels must be a list of integers.')
 
