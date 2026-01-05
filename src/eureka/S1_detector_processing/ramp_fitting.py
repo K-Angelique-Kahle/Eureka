@@ -283,14 +283,14 @@ class Eureka_RampFitStep(Step):
                 # it's underlying functionality.
                 self.weighting = 'optimal'
 
-                image_info, integ_info, _, _ = ramp_fit.ramp_fit(
+                image_info, integ_info, _ = ramp_fit.ramp_fit(
                     input_model, self.save_opt, readnoise_2d,
                     gain_2d, self.algorithm, self.weighting, max_cores,
                     dqflags.pixel, self.suppress_one_group)
             elif self.algorithm.lower() == 'likely':
                 # Want to use the newer likelihood-based ramp fitting algorithm
                 self.algorithm = 'LIKELY'
-                image_info, integ_info, _, _ = ramp_fit.ramp_fit(
+                image_info, integ_info, _ = ramp_fit.ramp_fit(
                     input_model, self.save_opt, readnoise_2d,
                     gain_2d, self.algorithm, self.weighting, max_cores,
                     dqflags.pixel, self.suppress_one_group)
